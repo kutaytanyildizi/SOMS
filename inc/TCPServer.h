@@ -1,3 +1,4 @@
+#pragma once
 #include <iostream>
 
 #include <winsock2.h>
@@ -8,10 +9,10 @@
 #include <map>
 #include <thread>
 
-class TCPServerException : public std::exception
+class TCPServerException final : public std::exception
 {
 public:
-    TCPServerException(const char* errorMessage) : message(errorMessage) {}
+    explicit TCPServerException(const char* errorMessage) : message(errorMessage) {}
 
     const char* what() const noexcept override
     {
@@ -25,16 +26,20 @@ private:
 class TCPServer
 {
 public:
-    TCPServer(int);
+    explicit TCPServer(const int port);
     void StartServer();
-    void AcceptConnections();
+    void StopServer();
 
 private:
-    void SetupSocketAddress(struct addrinfo**, struct addrinfo*);
-    void CreateSocket(int family, int sockType, int protocol);
-    void BindSocket(const sockaddr *name, int namelen);
+    void SetupSocketAddress(struct addrinfo**, const struct addrinfo*) const;
+    void CreateSocket(const int family, const int sockType, const int protocol);
+    void BindSocket(const sockaddr* name, const int nameLen) const;
 
-    void HandleClient(SOCKET clientSocket);
+    void AcceptConnections();
+
+    void ClearClients();
+
+    static void HandleClient(const SOCKET clientSocket);
 
 private:
     class WSAInitializer 
@@ -53,13 +58,17 @@ private:
             WSACleanup();
         }
     private:
-        WSADATA socketInfo;
+        WSADATA socketInfo{};
     };
 
+    std::thread mThread;
+
     WSAInitializer wsaData;
-    SOCKET m_socket;
+    SOCKET m_socket{};
 
     int serverPort;
 
     std::map<SOCKET, std::thread> clients;
+
+    bool isServerStopped = false;
 };

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.30)
+cmake_minimum_required(VERSION 3.29.5)
 project(SOMS)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -8,8 +8,6 @@ set(CMAKE_AUTOUIC ON)
 
 set(Qt6_DIR "C:/Qt/6.8.0/mingw_64/lib/cmake/Qt6")
 set(CMAKE_PREFIX_PATH "C:/Qt/6.8.0/mingw_64")
-
-find_package(SQLite3 REQUIRED)
 
 find_package(Qt6 COMPONENTS
   Core

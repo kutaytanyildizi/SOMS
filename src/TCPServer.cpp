@@ -2,20 +2,22 @@
 
 #include <functional>
 
+#define STATIC
+
 #define forever for(;;)
 
 #define DEFAULT_BUFLEN 512
 
-TCPServer::TCPServer(int port = 8080) : serverPort(port)
+TCPServer::TCPServer(const int port = 8080) : serverPort(port)
 {
-    struct addrinfo* addressInfo = NULL, hints;
-   
+    struct addrinfo* addressInfo = nullptr, hints{};
+
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_INET;       // IPv4
     hints.ai_socktype = SOCK_STREAM; // TCP
     hints.ai_protocol = IPPROTO_TCP; // TCP Protocol
     hints.ai_flags = AI_PASSIVE;     // Used as Server
-    
+
     try
     {
         SetupSocketAddress(&addressInfo, &hints);
@@ -31,7 +33,7 @@ TCPServer::TCPServer(int port = 8080) : serverPort(port)
     freeaddrinfo(addressInfo);
 }
 
-void TCPServer::SetupSocketAddress(struct addrinfo** addressInfo, struct addrinfo* hints)
+void TCPServer::SetupSocketAddress(struct addrinfo** addressInfo, const struct addrinfo* hints) const
 {
     if(getaddrinfo(nullptr, std::to_string(serverPort).c_str() , hints, addressInfo))
     {
@@ -39,10 +41,10 @@ void TCPServer::SetupSocketAddress(struct addrinfo** addressInfo, struct addrinf
         throw TCPServerException("Error while getting address information\n");
     }
 
-    std::cout << "Succesfully got adress information\n";
+    std::cout << "Successfully got address information\n";
 }
 
-void TCPServer::CreateSocket(int family, int sockType, int protocol)
+void TCPServer::CreateSocket(const int family, const int sockType, const int protocol)
 {
     m_socket = socket(family, sockType, protocol);
 
@@ -52,27 +54,44 @@ void TCPServer::CreateSocket(int family, int sockType, int protocol)
         throw TCPServerException("Creating socket failed\n");
     }
 
-    std::cout << "Socket succesfully created\n";
+    std::cout << "Socket successfully created\n";
 }
 
-void TCPServer::BindSocket(const sockaddr *name, int namelen)
+void TCPServer::BindSocket(const sockaddr* name, const int nameLen) const
 {
-    if(bind(m_socket, name, namelen) == SOCKET_ERROR)
+    if(bind(m_socket, name, nameLen) == SOCKET_ERROR)
     {
         closesocket(m_socket);
         WSACleanup();
         throw TCPServerException("Binding failed\n");
     }
 
-    std::cout << "Binding succesfull\n";
+    std::cout << "Binding successful\n";
 }
 
 void TCPServer::StartServer()
 {
-    int result;
+    isServerStopped = false;
+    mThread = std::thread(std::bind(AcceptConnections, this));
+}
 
-    result = listen(m_socket, SOMAXCONN);
-    if(result == SOCKET_ERROR) 
+void TCPServer::StopServer()
+{
+    isServerStopped = true;
+
+    while(!mThread.joinable()){}
+
+    mThread.join();
+
+    ClearClients();
+
+    shutdown(m_socket, SD_BOTH);
+    std::cout << "Socket Closed\n";
+}
+
+void TCPServer::AcceptConnections()
+{
+    if(listen(m_socket, SOMAXCONN) == SOCKET_ERROR) 
     {
         closesocket(m_socket);
         WSACleanup();
@@ -80,11 +99,8 @@ void TCPServer::StartServer()
     }
 
     std::cout << "Listening server port : " << serverPort << std::endl;
-}
 
-void TCPServer::AcceptConnections()
-{
-    forever
+    while(!isServerStopped)
     {
         if(SOCKET clientSocket = accept(m_socket, nullptr, nullptr); clientSocket != INVALID_SOCKET) 
         {
@@ -100,9 +116,9 @@ void TCPServer::AcceptConnections()
                 clients.erase(clientSocket);
             }
 
-            std::thread thread(std::bind(HandleClient, this, clientSocket));
+            std::thread thread([clientSocket] { HandleClient(clientSocket); });
 
-            clients.emplace(std::make_pair(clientSocket, std::move(thread)));
+            clients.emplace(clientSocket, std::move(thread));
         }
         else
         {
@@ -114,17 +130,28 @@ void TCPServer::AcceptConnections()
     }
 }
 
-void TCPServer::HandleClient(SOCKET clientSocket)
+void TCPServer::ClearClients()
 {
-    char recvbuf[DEFAULT_BUFLEN];
+    for(auto& iterator : clients)
+    {
+        closesocket(iterator.first);
+        iterator.second.join();
+    }
+
+    clients.clear();
+}
+
+STATIC void TCPServer::HandleClient(const SOCKET clientSocket)
+{
     int recvSize = 1;
 
     while(recvSize > 0)
     {
-        recvSize = recv(clientSocket, recvbuf, DEFAULT_BUFLEN, 0);
+        char buf[DEFAULT_BUFLEN];
+        recvSize = recv(clientSocket, buf, DEFAULT_BUFLEN, 0);
 
         if(recvSize > 0)
-            std::cout << "Client " << clientSocket << " : " << std::string(recvbuf, recvSize) << std::endl;
+            std::cout << "Client " << clientSocket << " : " << std::string(buf, recvSize) << std::endl;
     }
 
     std::cout << "Client disconnected - Socket ID : " << clientSocket << "\n";

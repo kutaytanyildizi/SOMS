@@ -3,6 +3,8 @@
 
 #include "inc/TCPServer.h"
 
+#include <chrono>
+
 int main(int argc, char *argv[]) 
 {
    /* QApplication a(argc, argv);
@@ -11,11 +13,18 @@ int main(int argc, char *argv[])
     button.show();
 
     return QApplication::exec(); */
+    TCPServer server(8080);
+
     try
     {
-        TCPServer server(8080);
-        server.StartServer();
-        server.AcceptConnections();
+        while(1)
+        {
+            server.StartServer();
+
+            std::this_thread::sleep_for(std::chrono::seconds(10));
+
+            server.StopServer();
+        }
     }
     catch(const TCPServerException& ex)
     {
