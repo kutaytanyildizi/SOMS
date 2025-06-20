@@ -83,8 +83,6 @@ void TCPServer::StopServer()
 
     isServerStopped = true;
 
-    // closesocket(m_socket);
-
     while(!mThread.joinable()){}
 
     mThread.join();
@@ -103,33 +101,60 @@ void TCPServer::AcceptConnections()
 
     std::cout << "Listening server port : " << serverPort << std::endl;
 
-    while(!isServerStopped)
+    while (!isServerStopped)
     {
-        if(SOCKET clientSocket = accept(m_socket, nullptr, nullptr); clientSocket != INVALID_SOCKET) 
-        {
-            std::cout << "New client connected - Socket ID : " << clientSocket << "\n";
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(m_socket, &readfds);
 
-            if(auto clientEntry = clients.find(clientSocket); clientEntry != clients.end())
+        timeval timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 200000;
+
+        int selectResult = select(0, &readfds, nullptr, nullptr, &timeout);
+
+        if (selectResult > 0 && FD_ISSET(m_socket, &readfds))
+        {
+            std::cout << "Starting to accept connections from clients" << "\n";
+
+            SOCKET clientSocket = accept(m_socket, nullptr, nullptr);
+            
+            if (clientSocket != INVALID_SOCKET)
             {
-                if(clientEntry->second.joinable())
+                std::cout << "New client connected - Socket ID : " << clientSocket << "\n";
+
+                if (auto clientEntry = clients.find(clientSocket); clientEntry != clients.end())
                 {
-                    clientEntry->second.join();
+                    if (clientEntry->second.joinable())
+                    {
+                        clientEntry->second.join();
+                    }
+
+                    clients.erase(clientSocket);
                 }
 
-                clients.erase(clientSocket);
+                std::thread thread([clientSocket] { HandleClient(clientSocket); });
+
+                clients.emplace(clientSocket, std::move(thread));
             }
-
-            std::thread thread([clientSocket] { HandleClient(clientSocket); });
-
-            clients.emplace(clientSocket, std::move(thread));
+            else
+            {
+                std::cout << "Accept error: " << WSAGetLastError() << "\n";
+            }
+        }
+        else if (selectResult == 0)
+        {
+            std::cout << "Accept timeout server stopped accepting connections" << "\n";
         }
         else
         {
-            std::cout << "Connection error : " << WSAGetLastError() << "\n";
+            std::cout << "Select error: " << WSAGetLastError() << "\n";
             closesocket(m_socket);
             WSACleanup();
             return;
         }
+
+        std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 }
 
