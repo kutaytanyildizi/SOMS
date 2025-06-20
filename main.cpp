@@ -1,9 +1,11 @@
 /* #include <QApplication>
 #include <QPushButton> */
 
-#include "inc/TCPServer.h"
+#include "TCPServer.h"
 
 #include <chrono>
+
+#define forever for(;;)
 
 int main(int argc, char *argv[]) 
 {
@@ -13,17 +15,16 @@ int main(int argc, char *argv[])
     button.show();
 
     return QApplication::exec(); */
-    TCPServer server(8080);
+
+    TCPServer TCPServer(8080);
 
     try
-    {
-        while(1)
+    {   
+        forever
         {
-            server.StartServer();
-
-            std::this_thread::sleep_for(std::chrono::seconds(10));
-
-            server.StopServer();
+            TCPServer.StartServer();
+            std::this_thread::sleep_for(std::chrono::seconds(20));
+            TCPServer.StopServer();
         }
     }
     catch(const TCPServerException& ex)

@@ -15,13 +15,18 @@ set(CMAKE_CXX_STANDARD 20)
 #   Widgets
 #   REQUIRED)
 
-add_executable(SOMS main.cpp inc/TCPServer.h src/TCPServer.cpp)
+add_executable(SOMS main.cpp src/TCPServer.cpp )
 
 target_link_libraries(SOMS
 #   Qt::Core
 #   Qt::Gui
 #   Qt::Widgets
   ws2_32
+)
+
+target_include_directories(SOMS PRIVATE 
+    ${CMAKE_SOURCE_DIR}/defines
+    ${CMAKE_SOURCE_DIR}/include
 )
 
 # if (WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)

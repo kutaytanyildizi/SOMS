@@ -1,6 +1,8 @@
-#include "../inc/TCPServer.h"
+#include "TCPServer.h"
 
 #include <functional>
+#include <condition_variable>
+#include <chrono>
 
 #define STATIC
 
@@ -77,15 +79,16 @@ void TCPServer::StartServer()
 
 void TCPServer::StopServer()
 {
+    ClearClients();
+
     isServerStopped = true;
+
+    // closesocket(m_socket);
 
     while(!mThread.joinable()){}
 
     mThread.join();
 
-    ClearClients();
-
-    shutdown(m_socket, SD_BOTH);
     std::cout << "Socket Closed\n";
 }
 
@@ -132,10 +135,14 @@ void TCPServer::AcceptConnections()
 
 void TCPServer::ClearClients()
 {
-    for(auto& iterator : clients)
+    for(auto& [socket, thread] : clients)
     {
-        closesocket(iterator.first);
-        iterator.second.join();
+        closesocket(socket);
+        
+        if(thread.joinable())
+        {
+            thread.join();
+        }
     }
 
     clients.clear();
@@ -151,7 +158,9 @@ STATIC void TCPServer::HandleClient(const SOCKET clientSocket)
         recvSize = recv(clientSocket, buf, DEFAULT_BUFLEN, 0);
 
         if(recvSize > 0)
+        {
             std::cout << "Client " << clientSocket << " : " << std::string(buf, recvSize) << std::endl;
+        }
     }
 
     std::cout << "Client disconnected - Socket ID : " << clientSocket << "\n";
