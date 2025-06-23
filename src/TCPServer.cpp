@@ -12,7 +12,7 @@
 
 TCPServer::TCPServer(const int port = 8080) : serverPort(port)
 {
-    struct addrinfo* addressInfo = nullptr, hints{};
+    struct addrinfo hints{};
 
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_INET;       // IPv4
@@ -23,8 +23,6 @@ TCPServer::TCPServer(const int port = 8080) : serverPort(port)
     try
     {
         SetupSocketAddress(&addressInfo, &hints);
-        CreateSocket(addressInfo->ai_family, addressInfo->ai_socktype, addressInfo->ai_protocol);
-        BindSocket(addressInfo->ai_addr, static_cast<int>(addressInfo->ai_addrlen));
     }
     catch(const TCPServerException& ex)
     {
@@ -54,6 +52,16 @@ void TCPServer::CreateSocket(const int family, const int sockType, const int pro
     {
         WSACleanup();
         throw TCPServerException("Creating socket failed\n");
+    }
+
+    int opt = 1;
+    if(setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt)) == SOCKET_ERROR)
+    {
+        closesocket(m_socket);
+        WSACleanup();
+        int error = WSAGetLastError();
+        std::cerr << "Bind failed with error: " << error << std::endl;
+        throw TCPServerException("Setting SO_REUSEADDR failed\n");
     }
 
     std::cout << "Socket successfully created\n";
@@ -87,15 +95,16 @@ void TCPServer::StopServer()
 
     mThread.join();
 
-    // closesocket(m_socket); 
-    // If there is no closesocket function for listener socket clients can connect
-    // TODO - Add closesocket here
+    closesocket(m_socket); 
 
     std::cout << "Socket Closed\n";
 }
 
 void TCPServer::AcceptConnections()
 {
+    CreateSocket(addressInfo->ai_family, addressInfo->ai_socktype, addressInfo->ai_protocol);
+    BindSocket(addressInfo->ai_addr, static_cast<int>(addressInfo->ai_addrlen));
+
     if(listen(m_socket, SOMAXCONN) == SOCKET_ERROR) 
     {
         closesocket(m_socket);

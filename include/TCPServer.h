@@ -32,6 +32,7 @@ private:
     std::thread mThread;
 
     WSAInitializer wsaData;
+    struct addrinfo* addressInfo;
     SOCKET m_socket{};
 
     int serverPort;
