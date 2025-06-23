@@ -18,6 +18,8 @@ public:
     void StopServer();
 
 private:
+    void SetupServerSocket();
+
     void SetupSocketAddress(struct addrinfo**, const struct addrinfo*) const;
     void CreateSocket(const int family, const int sockType, const int protocol);
     void BindSocket(const sockaddr* name, const int nameLen) const;
@@ -31,8 +33,7 @@ private:
 private:
     std::thread mThread;
 
-    WSAInitializer wsaData;
-    struct addrinfo* addressInfo;
+    WSADATA socketInfo;
     SOCKET m_socket{};
 
     int serverPort;

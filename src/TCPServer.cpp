@@ -12,7 +12,12 @@
 
 TCPServer::TCPServer(const int port = 8080) : serverPort(port)
 {
-    struct addrinfo hints{};
+
+}
+
+void TCPServer::SetupServerSocket()
+{
+    struct addrinfo* addressInfo = nullptr, hints{};
 
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_INET;       // IPv4
@@ -23,6 +28,8 @@ TCPServer::TCPServer(const int port = 8080) : serverPort(port)
     try
     {
         SetupSocketAddress(&addressInfo, &hints);
+        CreateSocket(addressInfo->ai_family, addressInfo->ai_socktype, addressInfo->ai_protocol);
+        BindSocket(addressInfo->ai_addr, static_cast<int>(addressInfo->ai_addrlen));
     }
     catch(const TCPServerException& ex)
     {
@@ -81,6 +88,18 @@ void TCPServer::BindSocket(const sockaddr* name, const int nameLen) const
 
 void TCPServer::StartServer()
 {
+    try
+    {
+        WSAStartup(MAKEWORD(2, 2), &socketInfo);
+        SetupServerSocket();
+    }
+    catch(const std::exception& ex)
+    {
+        std::cout << ex.what() << "\n";
+
+        throw TCPServerException("Start Server failed when setting up server socket\n");
+    }
+    
     isServerStopped = false;
     mThread = std::thread(std::bind(AcceptConnections, this));
 }
@@ -95,16 +114,16 @@ void TCPServer::StopServer()
 
     mThread.join();
 
-    closesocket(m_socket); 
+    shutdown(m_socket, SD_BOTH);
+    closesocket(m_socket);
+    
+    WSACleanup();
 
     std::cout << "Socket Closed\n";
 }
 
 void TCPServer::AcceptConnections()
 {
-    CreateSocket(addressInfo->ai_family, addressInfo->ai_socktype, addressInfo->ai_protocol);
-    BindSocket(addressInfo->ai_addr, static_cast<int>(addressInfo->ai_addrlen));
-
     if(listen(m_socket, SOMAXCONN) == SOCKET_ERROR) 
     {
         closesocket(m_socket);
