@@ -1,6 +1,3 @@
-/* #include <QApplication>
-#include <QPushButton> */
-
 #include "TCPServer.h"
 
 #include <chrono>
@@ -9,13 +6,6 @@
 
 int main(int argc, char *argv[]) 
 {
-   /* QApplication a(argc, argv);
-    QPushButton button("Hello world!", nullptr);
-    button.resize(200, 100);
-    button.show();
-
-    return QApplication::exec(); */
-
     TCPServer TCPServer(8080);
 
     try
@@ -25,6 +15,7 @@ int main(int argc, char *argv[])
             TCPServer.StartServer();
             std::this_thread::sleep_for(std::chrono::seconds(20));
             TCPServer.StopServer();
+            std::this_thread::sleep_for(std::chrono::seconds(10));
         }
     }
     catch(const TCPServerException& ex)

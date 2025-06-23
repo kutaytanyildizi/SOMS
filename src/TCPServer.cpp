@@ -87,6 +87,10 @@ void TCPServer::StopServer()
 
     mThread.join();
 
+    // closesocket(m_socket); 
+    // If there is no closesocket function for listener socket clients can connect
+    // TODO - Add closesocket here
+
     std::cout << "Socket Closed\n";
 }
 
@@ -113,7 +117,7 @@ void TCPServer::AcceptConnections()
 
         int selectResult = select(0, &readfds, nullptr, nullptr, &timeout);
 
-        if (selectResult > 0 && FD_ISSET(m_socket, &readfds))
+        if(selectResult > 0 && FD_ISSET(m_socket, &readfds))
         {
             std::cout << "Starting to accept connections from clients" << "\n";
 
@@ -142,7 +146,7 @@ void TCPServer::AcceptConnections()
                 std::cout << "Accept error: " << WSAGetLastError() << "\n";
             }
         }
-        else if (selectResult == 0)
+        else if(selectResult == 0)
         {
             std::cout << "Accept timeout server stopped accepting connections" << "\n";
         }
