@@ -4,6 +4,13 @@
 
 #include <winsock2.h>
 
+enum CONNECTION_STATUS
+{
+    NEW_CONNECTION,
+    NO_CONNECTION,
+    CONNECTION_ERROR
+};
+
 class TCPServerException final : public std::exception
 {
 public:
@@ -16,23 +23,4 @@ public:
 
 private:
     const char* message;
-};
-
-class WSAInitializer 
-{
-public:
-    WSAInitializer()
-    {
-        if(WSAStartup(MAKEWORD(2, 2), &socketInfo))
-        {
-            throw TCPServerException("WSA Startup Failed");
-        }
-    }
-
-    ~WSAInitializer()
-    {
-        WSACleanup();
-    }
-private:
-    WSADATA socketInfo{};
 };

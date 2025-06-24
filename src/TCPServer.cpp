@@ -1,19 +1,21 @@
 #include "TCPServer.h"
 
+#pragma comment(lib, "Ws2_32.lib")
+
 #include <functional>
 #include <condition_variable>
 #include <chrono>
 
 #define STATIC
 
-#define forever for(;;)
+static constexpr int ACTIVATE_SO_REUSEADDR = 1;
 
-#define DEFAULT_BUFLEN 512
+static constexpr int SOCKET_TIMEOUT_SECONDS = 0;
+static constexpr long SOCKET_TIMEOUT_MICROSECONDS = 200'000;
 
-TCPServer::TCPServer(const int port = 8080) : serverPort(port)
-{
+static constexpr size_t DEFAULT_BUFLEN = 512;
 
-}
+TCPServer::TCPServer(const int port = 8080) : serverPort(port){}
 
 void TCPServer::SetupServerSocket()
 {
@@ -61,13 +63,11 @@ void TCPServer::CreateSocket(const int family, const int sockType, const int pro
         throw TCPServerException("Creating socket failed\n");
     }
 
-    int opt = 1;
-    if(setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt)) == SOCKET_ERROR)
+    if(int opt = ACTIVATE_SO_REUSEADDR; setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt)) == SOCKET_ERROR)
     {
         closesocket(m_socket);
         WSACleanup();
         int error = WSAGetLastError();
-        std::cerr << "Bind failed with error: " << error << std::endl;
         throw TCPServerException("Setting SO_REUSEADDR failed\n");
     }
 
@@ -106,9 +106,9 @@ void TCPServer::StartServer()
 
 void TCPServer::StopServer()
 {
-    ClearClients();
-
     isServerStopped = true;
+
+    ClearClients();
 
     while(!mThread.joinable()){}
 
@@ -116,18 +116,43 @@ void TCPServer::StopServer()
 
     shutdown(m_socket, SD_BOTH);
     closesocket(m_socket);
+
+    FD_CLR(m_socket, &readFDS);
     
     WSACleanup();
 
     std::cout << "Socket Closed\n";
 }
 
+CONNECTION_STATUS TCPServer::IsIncomingConnectionAvailable(int timeoutSeconds, long timeoutMicroseconds)
+{
+    FD_ZERO(&readFDS);
+    FD_SET(m_socket, &readFDS);
+
+    timeout.tv_sec = timeoutSeconds;
+    timeout.tv_usec = timeoutMicroseconds;
+
+    int result = select(0, &readFDS, nullptr, nullptr, &timeout);
+
+    if(result > 0 && FD_ISSET(m_socket, &readFDS))
+    {
+        return CONNECTION_STATUS::NEW_CONNECTION;
+    }
+    else if(result == 0)
+    {
+        return CONNECTION_STATUS::NO_CONNECTION;
+    }
+    else
+    {
+        return CONNECTION_STATUS::CONNECTION_ERROR;
+    }
+}
+
 void TCPServer::AcceptConnections()
 {
     if(listen(m_socket, SOMAXCONN) == SOCKET_ERROR) 
     {
-        closesocket(m_socket);
-        WSACleanup();
+        StopServer();
         throw TCPServerException("Server cannot start listening\n");
     }
 
@@ -135,58 +160,63 @@ void TCPServer::AcceptConnections()
 
     while (!isServerStopped)
     {
-        fd_set readfds;
-        FD_ZERO(&readfds);
-        FD_SET(m_socket, &readfds);
-
-        timeval timeout;
-        timeout.tv_sec = 0;
-        timeout.tv_usec = 200000;
-
-        int selectResult = select(0, &readfds, nullptr, nullptr, &timeout);
-
-        if(selectResult > 0 && FD_ISSET(m_socket, &readfds))
+        switch(IsIncomingConnectionAvailable(SOCKET_TIMEOUT_SECONDS, SOCKET_TIMEOUT_MICROSECONDS))
         {
-            std::cout << "Starting to accept connections from clients" << "\n";
-
-            SOCKET clientSocket = accept(m_socket, nullptr, nullptr);
-            
-            if (clientSocket != INVALID_SOCKET)
+            case CONNECTION_STATUS::NEW_CONNECTION:
             {
-                std::cout << "New client connected - Socket ID : " << clientSocket << "\n";
-
-                if (auto clientEntry = clients.find(clientSocket); clientEntry != clients.end())
+                std::cout << "Starting to accept connections from clients" << "\n";
+    
+                SOCKET clientSocket = accept(m_socket, nullptr, nullptr);
+                
+                if (clientSocket != INVALID_SOCKET)
                 {
-                    if (clientEntry->second.joinable())
+                    std::cout << "New client connected - Socket ID : " << clientSocket << "\n";
+    
+                    if (auto clientEntry = clients.find(clientSocket); clientEntry != clients.end())
                     {
-                        clientEntry->second.join();
+                        if (clientEntry->second.joinable())
+                        {
+                            clientEntry->second.join();
+                        }
+    
+                        clients.erase(clientSocket);
                     }
-
-                    clients.erase(clientSocket);
+    
+                    std::thread thread([clientSocket] { HandleClient(clientSocket); });
+    
+                    clients.emplace(clientSocket, std::move(thread));
                 }
-
-                std::thread thread([clientSocket] { HandleClient(clientSocket); });
-
-                clients.emplace(clientSocket, std::move(thread));
+                else
+                {
+                    std::cout << "Accept error: " << WSAGetLastError() << "\n";
+                }
+    
+                break;
             }
-            else
+    
+            case CONNECTION_STATUS::NO_CONNECTION:
             {
-                std::cout << "Accept error: " << WSAGetLastError() << "\n";
+                // std::cout << "Accept timeout server stopped accepting connections" << "\n";
+                // Do nothing :)
+                break;
+            }
+            
+            case CONNECTION_STATUS::CONNECTION_ERROR:
+            {
+                std::cout << "Select error: " << WSAGetLastError() << "\n";
+                StopServer();
+                throw TCPServerException("Connection Error occured\n");
+    
+                break;
+            }
+            
+            default:
+            {
+                StopServer();
+                throw TCPServerException("Unknown Error occured\n");
+                break;
             }
         }
-        else if(selectResult == 0)
-        {
-            std::cout << "Accept timeout server stopped accepting connections" << "\n";
-        }
-        else
-        {
-            std::cout << "Select error: " << WSAGetLastError() << "\n";
-            closesocket(m_socket);
-            WSACleanup();
-            return;
-        }
-
-        std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 }
 

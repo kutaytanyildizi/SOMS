@@ -1,8 +1,9 @@
 #pragma once
 
-#include <WS2tcpip.h>
+#ifndef TCPSERVER_H
+#define TCPSERVER_H
 
-#pragma comment(lib, "Ws2_32.lib")
+#include <WS2tcpip.h>
 
 #include <iostream>
 #include <unordered_map>
@@ -24,6 +25,8 @@ private:
     void CreateSocket(const int family, const int sockType, const int protocol);
     void BindSocket(const sockaddr* name, const int nameLen) const;
 
+    CONNECTION_STATUS IsIncomingConnectionAvailable(int timeoutSeconds, long timeoutMicroseconds);
+
     void AcceptConnections();
 
     void ClearClients();
@@ -35,6 +38,8 @@ private:
 
     WSADATA socketInfo;
     SOCKET m_socket{};
+    fd_set readFDS;
+    timeval timeout;
 
     int serverPort;
 
@@ -42,3 +47,5 @@ private:
 
     bool isServerStopped = false;
 };
+
+#endif // TCPSERVER_H
